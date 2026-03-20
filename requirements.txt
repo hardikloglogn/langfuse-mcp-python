@@ -1,0 +1,11 @@
+# Multi-Agent Monitoring MCP - Requirements
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+langfuse>=2.0.0
+langgraph>=0.2.0
+langchain>=0.1.0
+mcp>=0.1.0
+pydantic>=2.0.0
+httpx>=0.25.0
+python-dotenv>=1.0.0
