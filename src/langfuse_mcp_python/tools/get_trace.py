@@ -1,97 +1,96 @@
-"""Get Trace Tool - Detailed trace inspection"""
+"""
+Enhanced Get Trace Tool
+FIXED: Proper metrics, better error handling, cache support
+"""
 
 from typing import Any, Dict
-
 from mcp.types import Tool
+from ..core.base_tool import BaseLangfuseTool
 
-from .base import BaseLangfuseTool
-
-
-TOOL_SPEC = Tool(
-    name="get_agent_trace",
-    description=(
-        "Retrieve detailed execution trace for a specific agent run. "
-        "Includes all observations, LLM calls, tool executions, and metadata."
-    ),
+GET_TRACE_TOOL_SPEC = Tool(
+    name="get_trace",
+    description="Retrieve detailed execution trace with all observations and metrics.",
     inputSchema={
         "type": "object",
         "properties": {
             "trace_id": {
                 "type": "string",
-                "description": "The trace ID to retrieve",
+                "description": "Trace ID to retrieve",
             },
             "include_observations": {
                 "type": "boolean",
                 "default": True,
-                "description": "Include detailed observations",
             },
             "depth": {
                 "type": "string",
                 "enum": ["minimal", "summary", "full"],
                 "default": "full",
-                "description": "Level of detail to include",
             },
         },
         "required": ["trace_id"],
     },
 )
 
-
 class GetTraceTool(BaseLangfuseTool):
-    """Retrieve detailed trace information"""
-
     async def execute(self, args: Dict[str, Any]) -> str:
-        """Execute the get_agent_trace tool"""
         try:
             trace_id = args["trace_id"]
             depth = args.get("depth", "full")
-
-            trace = self.langfuse.api.trace.get(trace_id)
-
+            
+            # Try cache first for full traces
+            cache_key = self.cache.make_key("trace", trace_id, depth)
+            
+            def fetch_trace():
+                return self.langfuse.api.trace.get(trace_id)
+            
+            # Use cache for frequently accessed traces
+            if depth == "minimal":
+                trace = await self._fetch_with_retry(fetch_trace)
+            else:
+                trace = self._get_cached_or_fetch(cache_key, fetch_trace, ttl=60)
+            
             if not trace:
                 return f"Trace not found: {trace_id}"
-
-            response = f"""
-                        [Agent Trace Details]
-
-                        **Trace ID**: {trace.id}
-                        **Agent**: {trace.metadata.get('agent_name', 'unknown')}
-                        **Session**: {trace.session_id or 'N/A'}
-                        **User**: {trace.user_id or 'N/A'}
-                        **Started**: {trace.timestamp.isoformat()}
-                        **Status**: {self._get_trace_status(trace)}
-
-                        """
-
+            
+            response = f"[SEARCH] **Trace Details**\n\n"
+            response += f"**ID**: {trace.id}\n"
+            response += f"**Agent**: {trace.metadata.get('agent_name', 'unknown')}\n"
+            response += f"**Session**: {trace.session_id or 'N/A'}\n"
+            response += f"**User**: {trace.user_id or 'N/A'}\n"
+            response += f"**Started**: {self._format_datetime(trace.timestamp)}\n"
+            response += f"**Status**: {self._get_trace_status(trace)}\n\n"
+            
             if depth in ["summary", "full"]:
+                # FIXED: Use proper metrics calculation
                 metrics = self._calculate_trace_metrics(trace)
-                response += f"""
-                            **Performance Metrics**:
-                            - Duration: {metrics.get('latency_ms', 0):.0f}ms
-                            - Tokens: {metrics.get('tokens', 0)}
-                            - Cost: ${metrics.get('cost', 0):.4f}
-                            - Observations: {metrics.get('observation_count', 0)}
-
-                            """
-
+                
+                response += f"**Performance Metrics**:\n"
+                response += f"  - Duration: {self._format_duration(metrics['latency_ms'])}\n"
+                response += f"  - Tokens: {self._format_tokens(metrics['tokens'])}\n"
+                response += f"  - Cost: {self._format_cost(metrics['cost'])}\n"
+                response += f"  - Observations: {metrics['observation_count']}\n\n"
+            
             if depth == "full" and args.get("include_observations", True):
-                observations = self.langfuse.api.observations.get_many(trace_id=trace_id)
-
-                response += f"""
-                            **Execution Steps** ({len(observations.data)} observations):
-
-                            """
+                observations = await self._fetch_with_retry(
+                    self.langfuse.api.observations.get_many,
+                    trace_id=trace_id,
+                )
+                
+                response += f"**Execution Steps** ({len(observations.data)} observations):\n\n"
+                
                 for i, obs in enumerate(observations.data[:20], 1):
-                    response += f"""
-                                {i}. **{obs.name}** ({obs.type})
-                                - Start: {obs.start_time.isoformat() if obs.start_time else 'N/A'}
-                                - Duration: {self._calculate_observation_duration(obs)}ms
-                                """
-                    if obs.type == "GENERATION":
-                        response += f"   - Model: {obs.model or 'N/A'}"
-                        response += f"   - Tokens: {obs.usage.total if obs.usage else 0}"
-
+                    obs_metrics = self._calculate_observation_metrics(obs)
+                    
+                    response += f"{i}. **{obs.name}** ({obs.type})\n"
+                    response += f"   - Duration: {self._format_duration(obs_metrics['latency_ms'])}\n"
+                    
+                    if obs.type == "GENERATION" and hasattr(obs, 'model'):
+                        response += f"   - Model: {obs.model}\n"
+                        response += f"   - Tokens: {self._format_tokens(obs_metrics['tokens'])}\n"
+                    
+                    response += "\n"
+            
             return response
-
         except Exception as e:
+            self.logger.error("Error fetching trace", trace_id=trace_id, error=str(e))
             return f"Error fetching trace: {str(e)}"

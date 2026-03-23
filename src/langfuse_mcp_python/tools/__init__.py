@@ -1,27 +1,78 @@
-"""MCP Tools for Multi-Agent monitoring"""
+"""All MCP tool implementations - Complete CRUD operations"""
 
-from .watch_agents import TOOL_SPEC as WATCH_AGENTS_SPEC, WatchAgentsTool
-from .get_trace import TOOL_SPEC as GET_TRACE_SPEC, GetTraceTool
-from .analyze_performance import TOOL_SPEC as ANALYZE_PERFORMANCE_SPEC, AnalyzePerformanceTool
-from .debug_failure import TOOL_SPEC as DEBUG_FAILURE_SPEC, DebugFailureTool
-from .monitor_costs import TOOL_SPEC as MONITOR_COSTS_SPEC, MonitorCostsTool
-from .get_sessions import TOOL_SPEC as GET_SESSIONS_SPEC, GetSessionsTool
+# Read operations
+from .scores import GetScoresTool, SubmitScoreTool
+from .metrics import GetMetricsTool
+from .prompts import GetPromptsTool
+from .sessions import GetSessionsTool
+from .datasets import GetDatasetsTool
+from .models import GetModelsTool
+from .comments import GetCommentsTool, AddCommentTool
+from .score_configs import GetScoreConfigsTool
+from .watch_agents import WatchAgentsTool
+from .get_trace import GetTraceTool
+from .analyze_performance import AnalyzePerformanceTool
 
-TOOL_SPECS = [
-    WATCH_AGENTS_SPEC,
-    GET_TRACE_SPEC,
-    ANALYZE_PERFORMANCE_SPEC,
-    DEBUG_FAILURE_SPEC,
-    MONITOR_COSTS_SPEC,
-    GET_SESSIONS_SPEC,
-]
+# CRUD operations
+from .traces_crud import DeleteTraceTool
+from .prompts_crud import CreatePromptTool, DeletePromptTool
+from .datasets_crud import CreateDatasetTool, CreateDatasetItemTool
+from .models_crud import CreateModelTool, DeleteModelTool
+from .annotation_queues import (
+    GetAnnotationQueuesTool,
+    CreateAnnotationQueueTool,
+    GetQueueItemsTool,
+    ResolveQueueItemTool,
+)
+from .blob_storage_integrations import (
+    GetBlobStorageIntegrationsTool,
+    UpsertBlobStorageIntegrationTool,
+    GetBlobStorageIntegrationStatusTool,
+    DeleteBlobStorageIntegrationTool,
+)
+from .llm_connections import GetLlmConnectionsTool, UpsertLlmConnectionTool
+from .projects import (
+    GetProjectsTool,
+    CreateProjectTool,
+    UpdateProjectTool,
+    DeleteProjectTool,
+)
 
 __all__ = [
-    "TOOL_SPECS",
+    # Read operations
+    "GetScoresTool",
+    "SubmitScoreTool",
+    "GetMetricsTool",
+    "GetPromptsTool",
+    "GetSessionsTool",
+    "GetDatasetsTool",
+    "GetModelsTool",
+    "GetCommentsTool",
+    "AddCommentTool",
+    "GetScoreConfigsTool",
     "WatchAgentsTool",
     "GetTraceTool",
     "AnalyzePerformanceTool",
-    "DebugFailureTool",
-    "MonitorCostsTool",
-    "GetSessionsTool",
+    # CRUD operations
+    "DeleteTraceTool",
+    "CreatePromptTool",
+    "DeletePromptTool",
+    "CreateDatasetTool",
+    "CreateDatasetItemTool",
+    "CreateModelTool",
+    "DeleteModelTool",
+    "GetAnnotationQueuesTool",
+    "CreateAnnotationQueueTool",
+    "GetQueueItemsTool",
+    "ResolveQueueItemTool",
+    "GetBlobStorageIntegrationsTool",
+    "UpsertBlobStorageIntegrationTool",
+    "GetBlobStorageIntegrationStatusTool",
+    "DeleteBlobStorageIntegrationTool",
+    "GetLlmConnectionsTool",
+    "UpsertLlmConnectionTool",
+    "GetProjectsTool",
+    "CreateProjectTool",
+    "UpdateProjectTool",
+    "DeleteProjectTool",
 ]

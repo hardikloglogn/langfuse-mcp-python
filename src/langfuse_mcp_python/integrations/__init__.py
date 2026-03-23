@@ -1,5 +1,5 @@
-"""Integration modules for external services"""
+"""Langfuse client integrations"""
 
-from .langfuse_client import LangfuseClientWrapper
+from .langfuse_client import EnhancedLangfuseClient
 
-__all__ = ["LangfuseClientWrapper"]
+__all__ = ["EnhancedLangfuseClient"]

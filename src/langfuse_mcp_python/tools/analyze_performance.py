@@ -1,167 +1,115 @@
-"""Analyze Performance Tool - Aggregate performance metrics"""
+"""
+Enhanced Analyze Performance Tool
+MAJOR FIX: Now uses Metrics API instead of broken manual calculation
+"""
 
 from typing import Any, Dict
-
 from mcp.types import Tool
+from ..core.base_tool import BaseLangfuseTool
+from .metrics import build_metrics_query
 
-from .base import BaseLangfuseTool
-
-
-TOOL_SPEC = Tool(
-    name="analyze_agent_performance",
-    description=(
-        "Analyze and aggregate performance metrics across multiple agent runs. "
-        "Provides insights into latency, cost, error rates, and token usage."
-    ),
+ANALYZE_PERFORMANCE_TOOL_SPEC = Tool(
+    name="analyze_performance",
+    description="Analyze agent performance using Langfuse Metrics API for accurate aggregated data.",
     inputSchema={
         "type": "object",
         "properties": {
-            "agent_name": {
-                "type": "string",
-                "description": "Optional: Specific agent to analyze",
-            },
+            "agent_name": {"type": "string"},
             "time_range": {
                 "type": "object",
                 "properties": {
-                    "start": {"type": "string", "format": "date-time"},
-                    "end": {"type": "string", "format": "date-time"},
+                    "from": {"type": "string", "format": "date-time"},
+                    "to": {"type": "string", "format": "date-time"},
                 },
-                "description": "Time range for analysis",
             },
             "group_by": {
                 "type": "string",
-                "enum": ["hour", "day", "agent", "session"],
-                "default": "hour",
-                "description": "How to group results",
-            },
-            "metrics": {
-                "type": "array",
-                "items": {
-                    "type": "string",
-                    "enum": ["latency", "cost", "error_rate", "token_usage"],
-                },
-                "default": ["latency", "cost", "error_rate", "token_usage"],
+                "enum": ["hour", "day", "model", "user"],
+                "default": "day",
             },
         },
     },
 )
 
-
 class AnalyzePerformanceTool(BaseLangfuseTool):
-    """Analyze agent performance metrics"""
-
     async def execute(self, args: Dict[str, Any]) -> str:
-        """Execute the analyze_agent_performance tool"""
         try:
-            agent_name = args.get("agent_name")
-            group_by = args.get("group_by", "hour")
-            time_range = args.get("time_range") or {}
-            range_start = self._parse_datetime(time_range.get("start"))
-            range_end = self._parse_datetime(time_range.get("end"))
-            range_start_naive = self._coerce_to_naive_utc(range_start) if range_start else None
-            range_end_naive = self._coerce_to_naive_utc(range_end) if range_end else None
-
-            traces = self.langfuse.api.trace.list(limit=100)
-
-            if agent_name:
-                traces.data = [
-                    t for t in traces.data
-                    if t.metadata.get("agent_name") == agent_name
-                ]
-
-            if range_start_naive or range_end_naive:
-                filtered = []
-                for t in traces.data:
-                    ts = self._coerce_to_naive_utc(t.timestamp)
-                    if range_start_naive and ts < range_start_naive:
-                        continue
-                    if range_end_naive and ts > range_end_naive:
-                        continue
-                    filtered.append(t)
-                traces.data = filtered
-
-            if not traces.data:
-                return "No traces found for analysis"
-
-            total_traces = len(traces.data)
-            total_cost = 0
-            total_tokens = 0
-            latencies = []
-            errors = 0
-            group_stats: Dict[str, Dict[str, Any]] = {}
-
-            for trace in traces.data:
-                metrics = self._calculate_trace_metrics(trace)
-                total_cost += metrics.get("cost", 0)
-                total_tokens += metrics.get("tokens", 0)
-                latencies.append(metrics.get("latency_ms", 0))
-
-                if self._get_trace_status(trace) == "error":
-                    errors += 1
-
-                group_key = self._get_group_key(trace, group_by)
-                group_entry = group_stats.setdefault(
-                    group_key,
-                    {"count": 0, "cost": 0.0, "tokens": 0, "latencies": [], "errors": 0},
-                )
-                group_entry["count"] += 1
-                group_entry["cost"] += metrics.get("cost", 0)
-                group_entry["tokens"] += metrics.get("tokens", 0)
-                group_entry["latencies"].append(metrics.get("latency_ms", 0))
-                if self._get_trace_status(trace) == "error":
-                    group_entry["errors"] += 1
-
-            avg_latency = sum(latencies) / len(latencies) if latencies else 0
-            p95_latency = sorted(latencies)[int(len(latencies) * 0.95)] if latencies else 0
-            error_rate = errors / total_traces if total_traces > 0 else 0
-
-            time_label = self._format_time_range_label(
-                range_start_naive,
-                range_end_naive,
-                total_traces,
+            # FIXED: Use Metrics API instead of manual calculation
+            filters = []
+            
+            if args.get("agent_name"):
+                filters.append({
+                    "column": "trace_tags",
+                    "operator": "contains",
+                    "value": args["agent_name"],
+                })
+            
+            metrics_query = {
+                "view": "observations",
+                "metrics": [
+                    "trace_count",
+                    "total_cost",
+                    "latency_p50",
+                    "latency_p95",
+                    "latency_p99",
+                    "total_tokens",
+                ],
+                "filters": filters,
+            }
+            
+            if args.get("time_range"):
+                metrics_query["time_range"] = args["time_range"]
+            
+            group_by_map = {
+                "hour": "timestamp",
+                "day": "timestamp",
+                "model": "providedModelName",
+                "user": "userId",
+            }
+            
+            group_by = args.get("group_by", "day")
+            if group_by in ["hour", "day"]:
+                metrics_query["granularity"] = group_by
+            else:
+                metrics_query["group_by"] = [group_by_map[group_by]]
+            
+            query, _ = build_metrics_query(metrics_query)
+            metrics = await self._fetch_with_retry(
+                self.langfuse.get_metrics,
+                query
             )
-
-            response = f"""
-                        [Performance Analysis]
-
-                        **Agent**: {agent_name or "All Agents"}
-                        **Total Runs**: {total_traces}
-                        **Time Period**: {time_label}
-
-                        **Metrics Summary**:
-                        - Avg Latency: {avg_latency:.0f}ms
-                        - P95 Latency: {p95_latency:.0f}ms
-                        - Total Cost: ${total_cost:.4f}
-                        - Total Tokens: {total_tokens:,}
-                        - Error Rate: {error_rate*100:.2f}%
-                        - Success Rate: {(1-error_rate)*100:.2f}%
-
-                        **Cost Breakdown**:
-                        - Avg per run: ${total_cost/total_traces:.4f}
-                        - Projected daily: ${total_cost * 24:.2f} (if sustained)
-
-                        **Grouped by**: {group_by}
-                        **Top Groups**:
-                        """
-
-            if group_stats:
-                sorted_groups = sorted(
-                    group_stats.items(),
-                    key=lambda x: x[1]["count"],
-                    reverse=True,
-                )
-                for i, (key, data) in enumerate(sorted_groups[:10], 1):
-                    avg_lat = (sum(data["latencies"]) / data["count"]) if data["count"] else 0
-                    err_rate = (data["errors"] / data["count"] * 100) if data["count"] else 0
-                    response += (
-                        f"{i}. **{key}**: {data['count']} runs, "
-                        f"avg latency {avg_lat:.0f}ms, "
-                        f"tokens {data['tokens']:,}, "
-                        f"cost ${data['cost']:.4f}, "
-                        f"error rate {err_rate:.2f}%"
-                    )
-
+            
+            response = f"[METRICS] **Performance Analysis**\n\n"
+            
+            if args.get("agent_name"):
+                response += f"**Agent**: {args['agent_name']}\n"
+            
+            response += f"**Grouped by**: {group_by}\n\n"
+            
+            # Format based on response type
+            if hasattr(metrics, 'data') and metrics.data:
+                for item in metrics.data[:20]:
+                    timestamp = item.get("timestamp") if isinstance(item, dict) else getattr(item, "timestamp", None)
+                    if timestamp is not None:
+                        response += f"**{timestamp}**\n"
+                    else:
+                        group_field = group_by_map.get(group_by, "model")
+                        group_value = item.get(group_field) if isinstance(item, dict) else getattr(item, group_field, None)
+                        if group_value is not None:
+                            response += f"**{group_value}**\n"
+                    
+                    trace_count = item.get("trace_count", 0) if isinstance(item, dict) else getattr(item, "trace_count", 0)
+                    total_cost = item.get("total_cost", 0) if isinstance(item, dict) else getattr(item, "total_cost", 0)
+                    latency_p50 = item.get("latency_p50", 0) if isinstance(item, dict) else getattr(item, "latency_p50", 0)
+                    latency_p95 = item.get("latency_p95", 0) if isinstance(item, dict) else getattr(item, "latency_p95", 0)
+                    total_tokens = item.get("total_tokens", 0) if isinstance(item, dict) else getattr(item, "total_tokens", 0)
+                    
+                    response += f"  - Traces: {int(trace_count):,}\n"
+                    response += f"  - Cost: ${float(total_cost):.4f}\n"
+                    response += f"  - Latency P50: {float(latency_p50):.0f}ms\n"
+                    response += f"  - Latency P95: {float(latency_p95):.0f}ms\n"
+                    response += f"  - Tokens: {int(total_tokens):,}\n\n"
+            
             return response
-
         except Exception as e:
             return f"Error analyzing performance: {str(e)}"
