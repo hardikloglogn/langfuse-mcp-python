@@ -11,10 +11,10 @@ from ..tools.scores import (
     SUBMIT_SCORE_TOOL_SPEC,
 )
 from ..tools.metrics import GetMetricsTool, METRICS_TOOL_SPEC
-from ..tools.prompts import GetPromptsTool, PROMPTS_TOOL_SPEC
+from ..tools.prompts import GetPromptsTool, PROMPTS_TOOL_SPEC, CreatePromptTool, CREATE_PROMPT_TOOL_SPEC, DeletePromptTool, DELETE_PROMPT_TOOL_SPEC
 from ..tools.sessions import GetSessionsTool, SESSIONS_TOOL_SPEC
 from ..tools.datasets import GetDatasetsTool, DATASETS_TOOL_SPEC
-from ..tools.models import GetModelsTool, MODELS_TOOL_SPEC
+from ..tools.models import GetModelsTool, MODELS_TOOL_SPEC, CreateModelTool, CREATE_MODEL_TOOL_SPEC, DeleteModelTool, DELETE_MODEL_TOOL_SPEC
 from ..tools.comments import (
     GetCommentsTool,
     AddCommentTool,
@@ -23,32 +23,17 @@ from ..tools.comments import (
 )
 from ..tools.score_configs import GetScoreConfigsTool, SCORE_CONFIGS_TOOL_SPEC
 from ..tools.watch_agents import WatchAgentsTool, WATCH_AGENTS_TOOL_SPEC
-from ..tools.get_trace import GetTraceTool, GET_TRACE_TOOL_SPEC
+from ..tools.trace import GetTraceTool, GET_TRACE_TOOL_SPEC, DeleteTraceTool, DELETE_TRACE_TOOL_SPEC
 from ..tools.analyze_performance import AnalyzePerformanceTool, ANALYZE_PERFORMANCE_TOOL_SPEC
 
 # CRUD operations - CREATE/UPDATE/DELETE
-from ..tools.traces_crud import (
-    DeleteTraceTool,
-    DELETE_TRACE_TOOL_SPEC,
-)
-from ..tools.prompts_crud import (
-    CreatePromptTool,
-    DeletePromptTool,
-    CREATE_PROMPT_TOOL_SPEC,
-    DELETE_PROMPT_TOOL_SPEC,
-)
-from ..tools.datasets_crud import (
+from ..tools.datasets import (
     CreateDatasetTool,
     CreateDatasetItemTool,
     CREATE_DATASET_TOOL_SPEC,
     CREATE_DATASET_ITEM_TOOL_SPEC,
 )
-from ..tools.models_crud import (
-    CreateModelTool,
-    DeleteModelTool,
-    CREATE_MODEL_TOOL_SPEC,
-    DELETE_MODEL_TOOL_SPEC,
-)
+
 from ..tools.annotation_queues import (
     GetAnnotationQueuesTool,
     CreateAnnotationQueueTool,

@@ -1,5 +1,5 @@
 """
-Comments Tool - Add and View Comments on Traces
+Comments Tool - Add, Update, Delete, and View Comments on Traces
 Important for collaboration and annotation
 """
 

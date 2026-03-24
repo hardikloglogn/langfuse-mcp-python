@@ -3,21 +3,17 @@
 # Read operations
 from .scores import GetScoresTool, SubmitScoreTool
 from .metrics import GetMetricsTool
-from .prompts import GetPromptsTool
+from .prompts import GetPromptsTool, CreatePromptTool, DeletePromptTool
 from .sessions import GetSessionsTool
-from .datasets import GetDatasetsTool
-from .models import GetModelsTool
+from .datasets import GetDatasetsTool, CreateDatasetTool, CreateDatasetItemTool
+from .models import GetModelsTool, CreateModelTool, DeleteModelTool
 from .comments import GetCommentsTool, AddCommentTool
 from .score_configs import GetScoreConfigsTool
 from .watch_agents import WatchAgentsTool
-from .get_trace import GetTraceTool
+from .trace import GetTraceTool, DeleteTraceTool 
 from .analyze_performance import AnalyzePerformanceTool
 
 # CRUD operations
-from .traces_crud import DeleteTraceTool
-from .prompts_crud import CreatePromptTool, DeletePromptTool
-from .datasets_crud import CreateDatasetTool, CreateDatasetItemTool
-from .models_crud import CreateModelTool, DeleteModelTool
 from .annotation_queues import (
     GetAnnotationQueuesTool,
     CreateAnnotationQueueTool,
