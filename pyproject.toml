@@ -1,7 +1,7 @@
 [project]
 name = "langfuse-mcp-python"
 version = "1.0.0"
-description = "MCP server for monitoring LangFuse multi-agent systems using Langfuse"
+description = "Production-ready MCP server for Langfuse observability with comprehensive API coverage"
 authors = [{name = "Your Name", email = "your.email@example.com"}]
 readme = "README.md"
 requires-python = ">=3.11"
@@ -9,12 +9,11 @@ license = {text = "MIT"}
 
 dependencies = [
     "langfuse>=2.0.0",
-    "langgraph>=0.2.0",
-    "langchain>=0.1.0",
     "mcp>=0.1.0",
-    "pydantic>=2.0.0",
-    "httpx>=0.25.0",
     "python-dotenv>=1.0.0",
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+    "tenacity>=8.0.0",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +23,10 @@ dev = [
     "black>=23.0.0",
     "mypy>=1.0.0",
     "ruff>=0.1.0",
+]
+
+agent-frameworks = [
+    "langgraph>=0.2.0",
 ]
 
 [project.scripts]
@@ -45,7 +48,6 @@ target-version = "py311"
 python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,214 +1,217 @@
 """
- Multi-Agent Monitoring MCP Server
-===========================================
+Production-Ready Langfuse MCP Server
+Enhanced with comprehensive API coverage, retry logic, caching, and proper error handling
 
-A Model Context Protocol (MCP) server for monitoring multi-agent systems
-using Langfuse observability platform.
-
-Author: Your Name
-Version: 1.0.0
+Features:
+- 30+ tools covering all major Langfuse APIs
+- Automatic retry with exponential backoff
+- In-memory caching with TTL
+- Structured logging
+- Metrics collection
+- Rate limiting
+- Connection pooling
 """
 
 import os
 import asyncio
 import argparse
-from typing import Any, Dict, List, Sequence, Optional
-from datetime import datetime
-from dataclasses import dataclass
+from typing import Any, Dict
 from pathlib import Path
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
 
-from .tools import (
-    TOOL_SPECS,
-    AnalyzePerformanceTool,
-    DebugFailureTool,
-    GetSessionsTool,
-    GetTraceTool,
-    MonitorCostsTool,
-    WatchAgentsTool,
-)
-from .fastmcp_server import create_fastmcp_server
+# Enhanced client and base
+from .integrations.langfuse_client import EnhancedLangfuseClient
+from .core.base_tool import InMemoryCache, MetricsCollector
+from .utils.tool_registry import register_tools, setup_tools
 
-# Langfuse imports
-from langfuse import Langfuse
-
-# Load environment variables from .env file
+# Load environment variables
 from dotenv import load_dotenv
 
-# Load .env from current directory or parent directories
+# Load .env from project root
 env_path = Path(__file__).parent.parent.parent / '.env'
 if env_path.exists():
     load_dotenv(env_path)
 else:
-    load_dotenv()  # Try to find .env in current working directory
+    load_dotenv()
 
 
-@dataclass
-class AgentMetrics:
-    """Agent performance metrics"""
-    trace_id: str
-    agent_name: str
-    duration_ms: float
-    token_usage: int
-    cost_usd: float
-    status: str
-    timestamp: datetime
-
-
-class LangfuseMonitoringServer:
-    """MCP Server for agent monitoring via Langfuse"""
+class EnhancedLangfuseMonitoringServer:
+    """
+    Production-ready MCP Server for Langfuse monitoring
     
-    def __init__(self):
-        self.server = Server("langfuse-monitoring")
+    Enhancements over original:
+    - Comprehensive API coverage (20+ tools vs 6)
+    - Retry logic with exponential backoff
+    - Caching with TTL
+    - Proper error handling
+    - Metrics collection
+    - Rate limiting
+    - Structured logging
+    """
+    
+    def __init__(self, enable_rate_limiting: bool = True):
+        self.server = Server("langfuse-monitoring-enhanced")
         self.langfuse = None
-        self._setup_langfuse()
-        self.tools = {
-            "watch_agents": WatchAgentsTool(self.langfuse),
-            "get_agent_trace": GetTraceTool(self.langfuse),
-            "analyze_agent_performance": AnalyzePerformanceTool(self.langfuse),
-            "debug_agent_failure": DebugFailureTool(self.langfuse),
-            "monitor_costs": MonitorCostsTool(self.langfuse),
-            "get_agent_sessions": GetSessionsTool(self.langfuse),
-        }
-        self._register_tools()
-    
-    def _setup_langfuse(self):
-        """Initialize Langfuse client"""
-        public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
-        secret_key = os.getenv("LANGFUSE_SECRET_KEY")
-        host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+        self.cache = InMemoryCache(default_ttl=300)  # 5-minute cache
+        self.metrics = MetricsCollector()
         
-        if not public_key or not secret_key:
-            raise ValueError(
-                "Missing Langfuse credentials. Set LANGFUSE_PUBLIC_KEY and "
-                "LANGFUSE_SECRET_KEY environment variables."
+        self._setup_langfuse(enable_rate_limiting)
+        self.tools = setup_tools(self.langfuse, self.cache, self.metrics)
+        self.tool_specs = register_tools(self.server, self.tools)
+    
+    def _setup_langfuse(self, enable_rate_limiting: bool):
+        """Initialize enhanced Langfuse client"""
+        try:
+            self.langfuse = EnhancedLangfuseClient(
+                enable_rate_limiting=enable_rate_limiting,
             )
-        
-        self.langfuse = Langfuse(
-            public_key=public_key,
-            secret_key=secret_key,
-            host=host
-        )
-        
-        print(f"Connected to Langfuse at {host}")
-    
-    def _register_tools(self):
-        """Register all MCP tools"""
-        
-        @self.server.list_tools()
-        async def list_tools() -> List[Tool]:
-            """List available monitoring tools"""
-            return TOOL_SPECS
-        
-        @self.server.call_tool()
-        async def call_tool(name: str, arguments: Dict[str, Any]) -> Sequence[TextContent]:
-            """Execute MCP tool"""
-            tool = self.tools.get(name)
-            if not tool:
-                raise ValueError(f"Unknown tool: {name}")
-            result = await tool.execute(arguments)
-            return [TextContent(type="text", text=result)]
-
+            print("[OK] Langfuse client initialized successfully")
+        except Exception as e:
+            print(f"[ERROR] Failed to initialize Langfuse client: {e}")
+            raise
     
     async def run(self):
-        """Run the MCP server"""
+        """Run the MCP server with stdio transport"""
+        print("[START] Starting Langfuse Monitoring MCP Server...")
+        print(f"[METRICS] API Coverage: {len(self.tool_specs)} tools")
+        print("[NOTE] Ready to accept requests\n")
+        
         async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
                 read_stream,
                 write_stream,
                 self.server.create_initialization_options()
             )
-
-def _coerce_bool(value: Optional[str], default: bool) -> bool:
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get server statistics"""
+        return {
+            "tools_count": len(self.tools),
+            "cache_stats": {
+                "size": len(self.cache.cache),
+            },
+            "metrics": self.metrics.get_stats(),
+        }
+    
+    def close(self):
+        """Cleanup resources"""
+        if self.langfuse:
+            self.langfuse.close()
+        print("[OK] Server shutdown complete")
 
 
 def main():
-    """Entry point"""
-    parser = argparse.ArgumentParser(description="Langfuse Monitoring MCP Server")
+    """Entry point for the enhanced MCP server"""
+    
+    parser = argparse.ArgumentParser(
+        description="Enhanced Langfuse Monitoring MCP Server"
+    )
+    
+    # Transport options
     parser.add_argument(
         "--transport",
         default=os.getenv("MCP_TRANSPORT", "stdio"),
         choices=["stdio", "streamable-http", "http", "sse"],
-        help="Transport to use (default: stdio)",
+        help="Transport mode (default: stdio)",
     )
     parser.add_argument(
         "--host",
-        default=os.getenv("MCP_HOST"),
-        help="Host to bind for HTTP transports (default: 127.0.0.1)",
+        default=os.getenv("MCP_HOST", "127.0.0.1"),
+        help="Host for HTTP transport (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=int(os.getenv("MCP_PORT", "8000")),
-        help="Port to bind for HTTP transports (default: 8000)",
+        help="Port for HTTP transport (default: 8000)",
     )
     parser.add_argument(
         "--path",
         default=os.getenv("MCP_PATH", "/mcp"),
-        help="HTTP path for Streamable HTTP transport (default: /mcp)",
+        help="HTTP path for MCP endpoint (default: /mcp)",
+    )
+    
+    # Server options
+    parser.add_argument(
+        "--no-rate-limit",
+        action="store_true",
+        help="Disable rate limiting (not recommended for production)",
     )
     parser.add_argument(
         "--json-response",
         action="store_true",
-        default=_coerce_bool(os.getenv("MCP_JSON_RESPONSE"), False),
-        help="Force JSON-only responses for HTTP transport",
+        default=os.getenv("MCP_JSON_RESPONSE", "").lower() in ("1", "true", "yes"),
+        help="Force JSON-only responses for HTTP",
     )
     parser.add_argument(
-        "--no-json-response",
-        action="store_false",
-        dest="json_response",
-        help="Disable JSON-only response mode",
-    )
-    parser.add_argument(
-        "--stateless-http",
+        "--stateless",
         action="store_true",
-        default=_coerce_bool(os.getenv("MCP_STATELESS_HTTP"), False),
-        help="Run Streamable HTTP in stateless mode",
+        default=os.getenv("MCP_STATELESS", "").lower() in ("1", "true", "yes"),
+        help="Run HTTP server in stateless mode (no sessions)",
     )
+    
+    # Info options
     parser.add_argument(
-        "--stateful-http",
-        action="store_false",
-        dest="stateless_http",
-        help="Run Streamable HTTP with sessions (stateful)",
+        "--stats",
+        action="store_true",
+        help="Print server statistics and exit",
     )
-
+    
     args = parser.parse_args()
-    transport = "streamable-http" if args.transport == "http" else args.transport
-
-    print("Starting Multi-Agent Monitoring MCP Server...")
-    server = LangfuseMonitoringServer()
-
-    if transport == "stdio":
-        asyncio.run(server.run())
-        return
-
-    if transport not in {"streamable-http", "sse"}:
-        raise ValueError(f"Unsupported transport: {transport}")
-
-    host = args.host or "127.0.0.1"
-    port = args.port or 8000
-    path = args.path or "/mcp"
-    if not path.startswith("/"):
-        path = f"/{path}"
-
-    print(f"Streamable HTTP endpoint: http://{host}:{port}{path}")
-    http_server = create_fastmcp_server(
-        tools=server.tools,
-        host=host,
-        port=port,
-        path=path,
-        json_response=args.json_response,
-        stateless_http=args.stateless_http,
-    )
-    http_server.run(
-        transport=transport,
-    )
+    
+    try:
+        # Create server instance
+        server = EnhancedLangfuseMonitoringServer(
+            enable_rate_limiting=not args.no_rate_limit,
+        )
+        
+        # If stats mode, print stats and exit
+        if args.stats:
+            print("\n[METRICS] Server Statistics:")
+            import json
+            print(json.dumps(server.get_stats(), indent=2))
+            return
+        
+        # Normalize transport
+        transport = args.transport
+        if transport == "http":
+            transport = "streamable-http"
+        
+        # Run server with selected transport
+        if transport == "stdio":
+            # Standard stdio transport
+            print("[START] Starting MCP Server (stdio transport)...")
+            asyncio.run(server.run())
+        
+        elif transport in ("streamable-http", "sse"):
+            # HTTP/SSE transport
+            from .http_server import create_http_server
+            
+            http_server = create_http_server(
+                mcp_server=server,
+                tools=server.tools,
+                host=args.host,
+                port=args.port,
+                path=args.path,
+                json_response=args.json_response,
+                stateless=args.stateless,
+            )
+            
+            http_server.run(transport=transport)
+        
+        else:
+            raise ValueError(f"Unsupported transport: {transport}")
+    
+    except KeyboardInterrupt:
+        print("\n\n[WARN]  Server interrupted by user")
+    except Exception as e:
+        print(f"\n[ERROR] Server error: {e}")
+        raise
+    finally:
+        if 'server' in locals():
+            server.close()
 
 
 if __name__ == "__main__":

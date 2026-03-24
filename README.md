@@ -10,11 +10,11 @@ This MCP server allows you to:
 - **Track** performance metrics (latency, cost, token usage)
 - **Debug** failed executions with detailed traces
 - **Analyze** agent performance across time periods
-- **Compare** different agent versions
+- **Compare** different agent versions via metadata filters
 - **Manage** costs and set budget alerts
 - **Visualize** multi-agent workflows
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Prerequisites
 
@@ -56,7 +56,11 @@ LANGFUSE_HOST=https://cloud.langfuse.com
 If you want a Streamable HTTP URL that works across all tools, run the server with the Streamable HTTP transport:
 
 ```bash
-python -m langfuse-mcp-python --transport streamable-http --host 127.0.0.1 --port 8000 --path /mcp
+python -m langfuse_mcp_python --transport streamable-http --host 127.0.0.1 --port 8000 --path /mcp
+```
+
+```bash
+python -m langfuse_mcp_python --transport sse --host 127.0.0.1 --port 8000
 ```
 
 You can then connect any Streamable HTTP-compatible MCP client to:
@@ -66,7 +70,6 @@ http://127.0.0.1:8000/mcp
 ```
 
 If you are using Claude Desktop or Cursor, keep the default `stdio` transport in their configs.
-
 
 ### 4b. Set Up MCP Client
 
@@ -99,7 +102,7 @@ Add to `.cursor/mcp.json`:
   "mcpServers": {
     "langfuse-monitor": {
       "command": "python",
-      "args": ["-m", "langfuse-mcp-python"],
+      "args": ["-m", "langfuse_mcp_python"],
       "env": {
         "LANGFUSE_PUBLIC_KEY": "pk-lf-xxxxx",
         "LANGFUSE_SECRET_KEY": "sk-lf-xxxxx"
@@ -143,9 +146,88 @@ result = app.invoke(
 )
 ```
 
-## 📚 Available Tools
+## Project Structure
 
-### 1. `watch_agents`
+- `src/langfuse_mcp_python/server.py` CLI entrypoint and stdio transport
+- `src/langfuse_mcp_python/http_server.py` Streamable HTTP and SSE transport
+- `src/langfuse_mcp_python/utils/tool_registry.py` Tool setup and registration
+- `src/langfuse_mcp_python/tools/` Tool implementations and specs
+- `src/langfuse_mcp_python/integrations/langfuse_client.py` Langfuse API client
+- `src/langfuse_mcp_python/core/base_tool.py` Shared cache and metrics
+
+## Available Tools
+
+### Monitoring and Analytics
+
+- `watch_agents` Monitor active agents
+- `get_trace` Fetch a trace by ID
+- `analyze_performance` Aggregate performance over time
+- `get_metrics` Aggregate metrics (latency, cost, tokens)
+
+### Scores and Evaluation
+
+- `get_scores` Fetch scores
+- `submit_score` Create a score
+- `get_score_configs` List score configurations
+
+### Prompts
+
+- `get_prompts` List prompts
+- `create_prompt` Create a prompt
+- `delete_prompt` Delete a prompt
+
+### Sessions
+
+- `get_sessions` List sessions
+
+### Datasets
+
+- `get_datasets` List datasets
+- `create_dataset` Create a dataset
+- `create_dataset_item` Add an item to a dataset
+
+### Models
+
+- `get_models` List models
+- `create_model` Create a model
+- `delete_model` Delete a model
+
+### Comments
+
+- `get_comments` List comments
+- `add_comment` Add a comment
+
+### Traces
+
+- `delete_trace` Delete a trace
+
+### Annotation Queues
+
+- `get_annotation_queues` List annotation queues
+- `create_annotation_queue` Create a queue
+- `get_queue_items` List queue items
+- `resolve_queue_item` Resolve a queue item
+
+### Blob Storage Integrations
+
+- `get_blob_storage_integrations` List integrations
+- `upsert_blob_storage_integration` Create or update an integration
+- `get_blob_storage_integration_status` Fetch integration status
+- `delete_blob_storage_integration` Delete an integration
+
+### LLM Connections
+
+- `get_llm_connections` List connections
+- `upsert_llm_connection` Create or update a connection
+
+### Projects
+
+- `get_projects` List projects
+- `create_project` Create a project
+- `update_project` Update a project
+- `delete_project` Delete a project
+
+### Example: `watch_agents`
 
 Monitor all active agents in real-time.
 
@@ -156,7 +238,7 @@ Show me all active agents from the last hour
 
 **Response:**
 ```
-📊 Active Agent Monitoring (last_1h)
+Active Agent Monitoring (last_1h)
 
 Total Traces Found: 15
 Showing: Top 10 traces
@@ -170,52 +252,7 @@ Showing: Top 10 traces
    - Cost: $0.0234
 ```
 
-### 2. `get_agent_trace`
-
-Get detailed execution trace for a specific run.
-
-**Example:**
-```
-Show me details for trace trace-abc123
-```
-
-### 3. `analyze_agent_performance`
-
-Analyze performance metrics across multiple runs.
-
-**Example:**
-```
-Analyze performance of my planner_agent over the last 24 hours
-```
-
-### 4. `debug_agent_failure`
-
-Investigate failed executions.
-
-**Example:**
-```
-Debug the failure in trace trace-failed-xyz
-```
-
-### 5. `monitor_costs`
-
-Track cost metrics and spending.
-
-**Example:**
-```
-Show me cost breakdown by agent for the last week
-```
-
-### 6. `get_agent_sessions`
-
-List multi-turn agent sessions.
-
-**Example:**
-```
-Show me all sessions for user user-123
-```
-
-## 🔧 Advanced Usage
+## Advanced Usage
 
 ### Filtering Agents
 
@@ -226,55 +263,32 @@ Watch only my research_agent and planner_agent from the last 24 hours
 ### Performance Analysis
 
 ```
-Compare performance of planner v1.0 vs v2.0 over the last 7 days
+Analyze performance of my planner_agent over the last 24 hours
 ```
 
-### Cost Monitoring with Alerts
+### Cost Monitoring
 
 ```
-Monitor costs with a threshold of $50, grouped by agent
+Show cost breakdown by agent for the last week
 ```
 
 ### Deep Debugging
 
 ```
-Debug trace-failed-abc and show similar failures
+Show trace details for trace-abc123
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────────────┐
-│   MCP Client            │
-│ (Claude, Cursor, etc.)  │
-└──────────┬──────────────┘
-           │ MCP Protocol
-           ▼
-┌─────────────────────────┐
-│  Langfuse Monitor MCP   │
-│  ┌──────────────────┐   │
-│  │ Langfuse Client  │   │
-│  └──────────────────┘   │
-└──────────┬──────────────┘
-           │ Langfuse API
-           ▼
-┌─────────────────────────┐
-│  Langfuse Platform      │
-│  - Traces               │
-│  - Metrics              │
-│  - Sessions             │
-└──────────┬──────────────┘
-           │ Instrumentation
-           ▼
-┌─────────────────────────┐
-│  Your Langfuse Agents   │
-│  - Agent 1              │
-│  - Agent 2              │
-│  - Agent N              │
-└─────────────────────────┘
+MCP Client (Claude, Cursor, etc.)
+  -> Langfuse MCP Server (stdio/HTTP)
+  -> Langfuse API
+  -> Langfuse Platform
+  -> Your Langfuse Agents
 ```
 
-## 🔒 Security Best Practices
+## Security Best Practices
 
 1. **Never commit credentials** - Use environment variables
 2. **Rotate API keys** regularly
@@ -282,30 +296,30 @@ Debug trace-failed-abc and show similar failures
 4. **Enable rate limiting** in production
 5. **Mask sensitive data** in traces
 
-## 📊 Example Monitoring Workflow
+## Example Monitoring Workflow
 
 ### Daily Agent Health Check
 
 1. Check active agents: `watch_agents`
-2. Review performance: `analyze_agent_performance`
-3. Check costs: `monitor_costs`
-4. Investigate any failures: `debug_agent_failure`
+2. Review performance: `analyze_performance`
+3. Check costs: `get_metrics`
+4. Investigate failures: `get_trace`
 
 ### Agent Optimization Cycle
 
-1. Establish baseline: `analyze_agent_performance` for current version
+1. Establish baseline: `analyze_performance` for current version metadata
 2. Deploy new version with different metadata
-3. Compare versions: `compare_agent_versions`
-4. Make data-driven deployment decision
+3. Compare versions by running `analyze_performance` with version filters
+4. Make data-driven deployment decisions
 
 ### Cost Control
 
-1. Set budget threshold: `monitor_costs --threshold_usd 100`
+1. Track costs: `get_metrics` grouped by agent
 2. Identify expensive agents
 3. Optimize high-cost operations
 4. Track savings over time
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### MCP Server Not Connecting
 
@@ -328,7 +342,7 @@ Debug trace-failed-abc and show similar failures
 3. Use "minimal" depth for trace details
 4. Consider batch processing for large datasets
 
-## 🤝 Contributing
+## Contributing
 
 Contributions welcome! Please:
 
@@ -337,17 +351,17 @@ Contributions welcome! Please:
 3. Add tests for new functionality
 4. Submit a pull request
 
-## 📄 License
+## License
 
 MIT License - see LICENSE file for details
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [Langfuse](https://langfuse.com) - Open-source LLM observability
 - [LangGraph](https://python.langchain.com/docs/langgraph) - Agent framework
 - [Model Context Protocol](https://modelcontextprotocol.io) - MCP specification
 
-## 🗺️ Roadmap
+## Roadmap
 
 - [x] Core monitoring tools
 - [x] Performance analysis
@@ -363,5 +377,5 @@ MIT License - see LICENSE file for details
 ---
 
 **Version**: 1.0.0  
-**Last Updated**: March 19, 2026  
+**Last Updated**: March 23, 2026  
 **Status**: Production Ready
