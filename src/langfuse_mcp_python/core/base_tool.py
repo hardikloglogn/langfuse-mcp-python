@@ -284,6 +284,61 @@ class BaseLangfuseTool(ABC):
         
         self.logger.info("Pagination complete", total_items=len(all_items), pages=page - 1)
         return all_items
+
+    async def _fetch_all_cursor_paginated(
+        self,
+        fetch_func: Callable,
+        max_pages: int = 1000,
+        limit: int = 1000,
+        **kwargs
+    ) -> List[Any]:
+        """
+        Fetch all pages of a cursor-paginated API response
+        - Uses `cursor` + `limit`
+        - Works with raw responses that expose meta.cursor
+        """
+        all_items: List[Any] = []
+        cursor = None
+        page = 1
+        
+        self.logger.info("Starting cursor paginated fetch", max_pages=max_pages)
+        
+        while page <= max_pages:
+            response = await self._fetch_with_retry(
+                fetch_func,
+                limit=limit,
+                cursor=cursor,
+                **kwargs
+            )
+            
+            data_obj = response.data if hasattr(response, "data") else response
+            items = data_obj.data if hasattr(data_obj, "data") else data_obj
+            
+            if not items:
+                break
+            
+            all_items.extend(items)
+            
+            meta = data_obj.meta if hasattr(data_obj, "meta") else None
+            if meta is None and isinstance(data_obj, dict):
+                meta = data_obj.get("meta")
+            
+            next_cursor = None
+            if meta is not None:
+                if isinstance(meta, dict):
+                    next_cursor = meta.get("cursor")
+                elif hasattr(meta, "cursor"):
+                    next_cursor = meta.cursor
+            
+            if not next_cursor:
+                self.logger.info("Reached last cursor page", page=page, items_fetched=len(all_items))
+                break
+            
+            cursor = next_cursor
+            page += 1
+        
+        self.logger.info("Cursor pagination complete", total_items=len(all_items), pages=page)
+        return all_items
     
     # ============================================================================
     # METRIC CALCULATION (FIXED)
@@ -301,28 +356,35 @@ class BaseLangfuseTool(ABC):
             "observation_count": 0,
         }
         
+        def _get(obj, *keys):
+            for key in keys:
+                if isinstance(obj, dict) and key in obj:
+                    return obj.get(key)
+                if hasattr(obj, key):
+                    return getattr(obj, key)
+            return None
+        
         # Extract latency
-        if hasattr(trace, 'latency') and trace.latency is not None:
-            metrics["latency_ms"] = float(trace.latency)
+        latency = _get(trace, "latency")
+        if latency is not None:
+            metrics["latency_ms"] = float(latency)
         
         # Extract token usage
-        if hasattr(trace, 'usage') and trace.usage:
-            if hasattr(trace.usage, 'total'):
-                metrics["tokens"] = int(trace.usage.total)
-            elif hasattr(trace.usage, 'totalTokens'):
-                metrics["tokens"] = int(trace.usage.totalTokens)
+        usage = _get(trace, "usage")
+        if usage:
+            total_tokens = _get(usage, "total", "totalTokens")
+            if total_tokens is not None:
+                metrics["tokens"] = int(total_tokens)
         
-        # Extract cost
-        if hasattr(trace, 'calculated_total_cost') and trace.calculated_total_cost is not None:
-            metrics["cost"] = float(trace.calculated_total_cost)
-        elif hasattr(trace, 'calculatedTotalCost') and trace.calculatedTotalCost is not None:
-            metrics["cost"] = float(trace.calculatedTotalCost)
+        # Extract cost (prefer explicit total_cost/totalCost when present)
+        cost = _get(trace, "total_cost", "totalCost", "calculated_total_cost", "calculatedTotalCost")
+        if cost is not None:
+            metrics["cost"] = float(cost)
         
         # Extract observation count
-        if hasattr(trace, 'observation_count'):
-            metrics["observation_count"] = int(trace.observation_count)
-        elif hasattr(trace, 'observationCount'):
-            metrics["observation_count"] = int(trace.observationCount)
+        observation_count = _get(trace, "observation_count", "observationCount")
+        if observation_count is not None:
+            metrics["observation_count"] = int(observation_count)
         
         return metrics
     
@@ -346,7 +408,11 @@ class BaseLangfuseTool(ABC):
                 metrics["tokens"] = int(observation.usage.total)
         
         # Extract cost
-        if hasattr(observation, 'calculated_total_cost') and observation.calculated_total_cost:
+        if hasattr(observation, 'total_cost') and observation.total_cost is not None:
+            metrics["cost"] = float(observation.total_cost)
+        elif hasattr(observation, 'totalCost') and observation.totalCost is not None:
+            metrics["cost"] = float(observation.totalCost)
+        elif hasattr(observation, 'calculated_total_cost') and observation.calculated_total_cost:
             metrics["cost"] = float(observation.calculated_total_cost)
         
         return metrics
@@ -410,8 +476,21 @@ class BaseLangfuseTool(ABC):
     # ============================================================================
     
     def _format_cost(self, cost: float) -> str:
-        """Format cost in USD"""
-        return f"${cost:.4f}"
+        """Format cost in USD with sensible precision for very small values"""
+        if cost is None:
+            return "$0"
+        abs_cost = abs(cost)
+        if abs_cost == 0:
+            return "$0"
+        if abs_cost < 1e-6:
+            # Preserve extremely tiny costs in scientific notation
+            return f"${cost:.6e}"
+        if abs_cost < 0.01:
+            # Preserve tiny costs instead of rounding to $0.0000
+            return f"${cost:.12f}".rstrip("0").rstrip(".")
+        if abs_cost < 1:
+            return f"${cost:.4f}"
+        return f"${cost:.2f}"
     
     def _format_duration(self, ms: float) -> str:
         """Format duration in human-readable format"""
