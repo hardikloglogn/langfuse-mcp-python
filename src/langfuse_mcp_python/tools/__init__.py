@@ -12,6 +12,7 @@ from .score_configs import GetScoreConfigsTool
 from .watch_agents import WatchAgentsTool
 from .trace import GetTraceTool, DeleteTraceTool 
 from .analyze_performance import AnalyzePerformanceTool
+from .cost_metrics import GetCostMetricsTool
 
 # CRUD operations
 from .annotation_queues import (
@@ -49,6 +50,7 @@ __all__ = [
     "WatchAgentsTool",
     "GetTraceTool",
     "AnalyzePerformanceTool",
+    "GetCostMetricsTool",
     # CRUD operations
     "DeleteTraceTool",
     "CreatePromptTool",

@@ -25,6 +25,7 @@ from ..tools.score_configs import GetScoreConfigsTool, SCORE_CONFIGS_TOOL_SPEC
 from ..tools.watch_agents import WatchAgentsTool, WATCH_AGENTS_TOOL_SPEC
 from ..tools.trace import GetTraceTool, GET_TRACE_TOOL_SPEC, DeleteTraceTool, DELETE_TRACE_TOOL_SPEC
 from ..tools.analyze_performance import AnalyzePerformanceTool, ANALYZE_PERFORMANCE_TOOL_SPEC
+from ..tools.cost_metrics import GetCostMetricsTool, GET_COST_METRICS_TOOL_SPEC
 
 # CRUD operations - CREATE/UPDATE/DELETE
 from ..tools.datasets import (
@@ -87,6 +88,7 @@ def setup_tools(langfuse_client: Any, cache: Any, metrics: Any) -> Dict[str, Any
         "watch_agents": create_tool(WatchAgentsTool),
         "get_trace": create_tool(GetTraceTool),
         "analyze_performance": create_tool(AnalyzePerformanceTool),
+        "get_cost_metrics": create_tool(GetCostMetricsTool),
 
         # Scores & Evaluation (READ/WRITE)
         "get_scores": create_tool(GetScoresTool),
@@ -179,6 +181,7 @@ def register_tools(server: Server, tools: Dict[str, Any]) -> List[Tool]:
         WATCH_AGENTS_TOOL_SPEC,
         GET_TRACE_TOOL_SPEC,
         ANALYZE_PERFORMANCE_TOOL_SPEC,
+        GET_COST_METRICS_TOOL_SPEC,
         METRICS_TOOL_SPEC,
 
         # Scores & Evaluation
