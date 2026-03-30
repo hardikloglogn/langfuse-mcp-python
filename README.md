@@ -1,6 +1,6 @@
-# Multi-Agent Monitoring MCP Server
+# Monitoring and observability MCP Server
 
-A Model Context Protocol (MCP) server for comprehensive monitoring and observability of multi-agent systems using Langfuse.
+A Model Context Protocol (MCP) server for comprehensive monitoring and observability of systems using Langfuse.
 
 ## 🎯 What This Does
 
@@ -12,7 +12,7 @@ This MCP server allows you to:
 - **Analyze** agent performance across time periods
 - **Compare** different agent versions via metadata filters
 - **Manage** costs and set budget alerts
-- **Visualize** multi-agent workflows
+- **Visualize** agent workflows
 
 ## Quick Start
 
